@@ -57,11 +57,11 @@ func TestLabKernelIsolation(t *testing.T) {
 			cmd.Stderr = &errOut
 			err := cmd.Run()
 			if mode == "lab" {
-				if cmd.ProcessState.ExitCode() != exitMismatch || !bytes.Contains(out.Bytes(), []byte(`"Scenario": "tls-http-no-response"`)) {
+				if cmd.ProcessState.ExitCode() != exitOK || !bytes.Contains(out.Bytes(), []byte(`"Scenario": "tls-http-no-response"`)) {
 					t.Fatalf("isolated lab: %v %s", err, errOut.String())
 				}
 				var ordinary bytes.Buffer
-				if code := run([]string{"lab", "run", "--all", "--json"}, &ordinary, &errOut); code != exitMismatch || !bytes.Equal(out.Bytes(), ordinary.Bytes()) {
+				if code := run([]string{"lab", "run", "--all", "--json"}, &ordinary, &errOut); code != exitOK || !bytes.Equal(out.Bytes(), ordinary.Bytes()) {
 					t.Fatal("kernel isolation changed serialized evidence")
 				}
 			} else if cmd.ProcessState.Sys().(syscall.WaitStatus).Signal() != syscall.SIGSYS {

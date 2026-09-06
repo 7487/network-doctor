@@ -495,10 +495,9 @@ func interpret(t *Target, order []ProbeID, res map[ProbeID]ProbeResult) Diagnosi
 					rulesOut(DiagnosisLocalDeviceUnreachable, ProbeTargetTCP, ObservationCause))
 				return withEvidence(DiagnosisTCPConnectionRefused, ProbeTargetTCP, "Every TCP connection attempt to "+hp+" was explicitly refused: the device is on the network, but nothing is listening on that port.", VerdictService, evidence)
 			case directOK():
-				// This machine's own networking demonstrably works, so the
-				// silence is the device's. Which of the reasons it is cannot be
-				// told from here, and the sentence must not pick one.
-				return blame(DiagnosisLocalDeviceUnreachable, ProbeTargetTCP, hp+" did not answer, though this machine's network is working: the device may be powered off or asleep, may have a different address now, or may be dropping the connection.", VerdictService, ProbeInternet)
+				// Reference success does not locate silence on the local
+				// device or distinguish forward-path loss from lost replies.
+				return blame(DiagnosisLocalDeviceUnreachable, ProbeTargetTCP, hp+" did not answer, though reference egress works: the device may be off or moved, or traffic to it or its replies may be lost or filtered.", VerdictService, ProbeInternet)
 			case !has(ProbeInternet):
 				evidence := addEvidence(supportRows(ProbeTargetTCP),
 					notEvaluated(ProbeInternet, NotEvaluatedNotSelected))
@@ -529,7 +528,7 @@ func interpret(t *Target, order []ProbeID, res map[ProbeID]ProbeResult) Diagnosi
 			evidence := addEvidence(supportRows(ProbeTargetTCP, ProbeInternet, ProbeDNS),
 				rulesOut(DiagnosisLocalEgressFailure, ProbeInternet, ObservationStatusPass),
 				rulesOut(DiagnosisDNSFailure, ProbeDNS, ObservationDNSAnswers))
-			return withEvidence(DiagnosisTargetUnreachable, ProbeTargetTCP, hp+" is unreachable though DNS and the general internet work: remote port closed, firewall, or VPN routing.", VerdictService, evidence)
+			return withEvidence(DiagnosisTargetUnreachable, ProbeTargetTCP, hp+" is unreachable though DNS and reference egress work: filtering, target-specific routing, a broken return path, or server silence remain possible.", VerdictService, evidence)
 		}
 		if prx {
 			return blame(DiagnosisProxyOnlyNetwork, ProbeTargetTCP, hp+" is unreachable directly, but the environment proxy has egress: this is a proxy-only network, so route traffic through the proxy.", VerdictNetwork, ProbeProxy, ProbeInternet)

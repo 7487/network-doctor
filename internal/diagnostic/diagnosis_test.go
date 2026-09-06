@@ -746,7 +746,7 @@ func TestDiagnoseLocalDeviceTargetTCPFailure(t *testing.T) {
 		{
 			name: "silent with the internet up", target: "192.168.1.23:9100",
 			internet: StatusPass,
-			want:     "did not answer, though this machine's network is working", wantVerdict: VerdictService,
+			want:     "did not answer, though reference egress works", wantVerdict: VerdictService,
 		},
 		{
 			// The device and the egress check's reference endpoints were both
@@ -812,9 +812,9 @@ func TestDiagnoseLocalTargetFollowsResolvedAddresses(t *testing.T) {
 		addrs []net.IP
 		want  string
 	}{
-		{"every address is local", []net.IP{net.ParseIP("192.168.1.9")}, "did not answer, though this machine's network is working"},
-		{"a public address among them keeps the internet reading", []net.IP{net.ParseIP("192.168.1.9"), net.ParseIP("93.184.216.34")}, "unreachable though DNS and the general internet work"},
-		{"no addresses at all", nil, "unreachable though DNS and the general internet work"},
+		{"every address is local", []net.IP{net.ParseIP("192.168.1.9")}, "did not answer, though reference egress works"},
+		{"a public address among them keeps the internet reading", []net.IP{net.ParseIP("192.168.1.9"), net.ParseIP("93.184.216.34")}, "unreachable though DNS and reference egress work"},
+		{"no addresses at all", nil, "unreachable though DNS and reference egress work"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

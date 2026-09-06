@@ -384,7 +384,7 @@ func diagnosisMatrix() []matrixCase {
 			res: map[ProbeID]ProbeResult{
 				ProbeIface: ok(StatusPass), ProbeInternet: ok(StatusPass), ProbeDNS: ok(StatusNA), ProbeTargetTCP: ok(StatusFail),
 			},
-			summary: "192.168.1.10:9100 did not answer, though this machine's network is working: the device may be powered off or asleep, may have a different address now, or may be dropping the connection.",
+			summary: "192.168.1.10:9100 did not answer, though reference egress works: the device may be off or moved, or traffic to it or its replies may be lost or filtered.",
 			verdict: VerdictService, focus: ProbeTargetTCP,
 			id: "local_device_unreachable", evidence: []ProbeID{ProbeTargetTCP, ProbeInternet},
 		},
@@ -429,7 +429,7 @@ func diagnosisMatrix() []matrixCase {
 		{
 			name: "target unreachable while the internet works", target: tls, order: webOrder,
 			res:     with(map[ProbeID]ProbeResult{ProbeTargetTCP: ok(StatusFail)}),
-			summary: "example.com:443 is unreachable though DNS and the general internet work: remote port closed, firewall, or VPN routing.",
+			summary: "example.com:443 is unreachable though DNS and reference egress work: filtering, target-specific routing, a broken return path, or server silence remain possible.",
 			verdict: VerdictService, focus: ProbeTargetTCP,
 			id: "target_unreachable", evidence: []ProbeID{ProbeTargetTCP, ProbeInternet, ProbeDNS},
 		},

@@ -68,7 +68,7 @@ func TestDiagnoseTargetBranches(t *testing.T) {
 				ProbeIface: pass, ProbeInternet: pass, ProbeDNS: pass,
 				ProbeTargetTCP: fail, ProbeTLS: skip, ProbeHTTP: pass, ProbeHTTPS: skip,
 			},
-			want: "unreachable though DNS and the general internet work",
+			want: "unreachable though DNS and reference egress work",
 		},
 		{
 			name: "target unreachable but internet is degraded",
@@ -76,7 +76,7 @@ func TestDiagnoseTargetBranches(t *testing.T) {
 				ProbeIface: pass, ProbeInternet: warn, ProbeDNS: pass,
 				ProbeTargetTCP: fail, ProbeTLS: skip, ProbeHTTP: pass, ProbeHTTPS: skip,
 			},
-			want: "unreachable though DNS and the general internet work",
+			want: "unreachable though DNS and reference egress work",
 		},
 		{
 			// Both silent, and nothing looked at where: the run may say what

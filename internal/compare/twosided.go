@@ -67,11 +67,8 @@ type TwoSided struct {
 	Schema string `json:"schema"`
 	A      Side   `json:"a"`
 	B      Side   `json:"b"`
-	// SameTarget is always true in a reading that was produced at all: two runs
-	// that observed different endpoints are refused rather than placed, because
-	// a row that failed against one host and passed against another says
-	// nothing about which machine is at fault. It is carried so the document is
-	// self-describing.
+	// SameTarget means the same logical host, port and protocol. A hostname
+	// can resolve to different endpoints on the two machines.
 	SameTarget bool `json:"same_target"`
 	// Checks is every check ID in either snapshot, in the order the first run
 	// executed them, then the ones only the second run had. Comparable says
@@ -116,7 +113,7 @@ type Localization struct {
 }
 
 // DifferentTargetsError is what TwoSidedSnapshots returns for two runs that did
-// not observe the same endpoint. It is refused rather than reported, which is
+// name the same logical target. It is refused rather than reported, which is
 // the deliberate difference from Snapshots: a comparison of two endpoints is a
 // question with an answer, and a localization across two endpoints is not.
 type DifferentTargetsError struct{ A, B string }
@@ -233,7 +230,7 @@ func localize(rows []SideRow) Localization {
 			Alternatives: []string{
 				"the endpoint is failing for both machines",
 				"the two machines share the path, resolver, or network that is failing",
-				"each machine has its own fault with the same effect",
+				"different endpoints or separate faults produce failures in the same checks",
 			},
 		}
 	}
@@ -242,12 +239,9 @@ func localize(rows []SideRow) Localization {
 // oneSided is the finding the whole reading exists for: rows that fail from one
 // machine and pass from the other.
 //
-// The conclusion it is allowed to draw is narrow. Two machines that reach an
-// endpoint differently prove the failure is specific to one of them, and prove
-// nothing about which part of that machine's situation is responsible. Its own
-// network state, its path, and an endpoint that treats the two machines
-// differently all produce exactly this evidence, so all three are listed and
-// none is chosen.
+// Placement identifies the observed failing side, not the cause's location.
+// Even one hostname can select different servers. Matching addresses also do
+// not exclude endpoint policy, backend selection or changes between captures.
 func oneSided(onlyA, onlyB, shared []string) Localization {
 	side, name, other, only := SideA, "A", "B", onlyA
 	if len(onlyB) > 0 {
@@ -256,21 +250,21 @@ func oneSided(onlyA, onlyB, shared []string) Localization {
 	alternatives := []string{
 		"side " + name + "'s own network state",
 		"side " + name + "'s path to the endpoint",
-		"the endpoint treating the two machines differently, by address or by policy",
+		"endpoint-specific failure, including different servers behind the same name or different treatment by address or policy",
 		"the endpoint or the path changing between the two runs",
 	}
 	if len(shared) == 0 {
 		return Localization{
 			ID: TwoSidedOneSideFails, Side: side, Evidence: only,
-			Summary: "Every failed check passes from side " + other + ", so the failure is specific to side " +
-				name + "'s vantage point rather than to the endpoint alone.",
+			Summary: "Every failed check passes from side " + other + ", so failures were observed only from side " +
+				name + ". This does not locate the cause on that side or exclude an endpoint-specific cause.",
 			Ambiguous: true, Alternatives: alternatives,
 		}
 	}
 	return Localization{
 		ID: TwoSidedOneSideFailsMore, Side: side, Evidence: append(append([]string{}, shared...), only...),
 		Summary: "Some checks fail from both machines, and side " + name +
-			" fails others that pass from side " + other + ", so at least one failure is specific to side " + name + ".",
+			" fails others that pass from side " + other + ". Those additional failures were observed only from side " + name + "; their causes are not localized.",
 		Ambiguous:    true,
 		Alternatives: append([]string{"a shared cause behind the checks that fail on both machines"}, alternatives...),
 	}

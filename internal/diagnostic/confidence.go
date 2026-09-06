@@ -142,14 +142,15 @@ var diagnosisConfidence = map[DiagnosisID]confidenceClass{
 	DiagnosisQUICUnavailable: classObserved,
 	DiagnosisProxyFailure:    classObserved,
 
-	// Reaching the endpoint. A refusal is a packet from a peer, and silence
-	// with egress independently proved is the far end's silence. Silence from a
-	// local device is not: off, moved, and filtering are indistinguishable from
-	// here. The family and address findings each rest on a controlled
-	// comparison inside one run.
+	// A refusal observes an explicit rejection, without identifying who sent it.
+	// Successful reference egress does not locate target silence: filtering,
+	// destination-specific routing, a broken return path and a silent peer all
+	// remain possible, for local devices as well as public targets. These name
+	// only the failed rung. Family and address comparisons are narrower observed
+	// contrasts, without claiming why the unsuccessful alternative failed.
 	DiagnosisTCPConnectionRefused:   classObserved,
-	DiagnosisTargetUnreachable:      classObserved,
-	DiagnosisLocalDeviceUnreachable: classInferred,
+	DiagnosisTargetUnreachable:      classBroad,
+	DiagnosisLocalDeviceUnreachable: classBroad,
 	DiagnosisReachabilityUntested:   classUnresolved,
 	DiagnosisIPv4TargetUnreachable:  classObserved,
 	DiagnosisIPv6TargetUnreachable:  classObserved,

@@ -50,6 +50,18 @@ func TestConfidenceOfRepresentativeFindings(t *testing.T) {
 			why: "an independently measured offset points the same way as the certificate rejection",
 		},
 		{
+			matrixCase: "target reachable over IPv4 only", want: ConfidenceHigh,
+			why: "the measured family contrast is specific, without claiming why IPv6 failed",
+		},
+		{
+			matrixCase: "target reachable over IPv6 only", want: ConfidenceHigh,
+			why: "the measured family contrast is specific, without claiming why IPv4 failed",
+		},
+		{
+			matrixCase: "one target address fails before another succeeds", want: ConfidenceHigh,
+			why: "individual attempts establish partial reachability without blaming a server or path",
+		},
+		{
 			matrixCase: "generic system resolver failing", want: ConfidenceMedium,
 			why: "one query each, at one moment, does not separate a resolver that is broken from a name whose own servers were briefly failing for everyone",
 		},
@@ -62,7 +74,7 @@ func TestConfidenceOfRepresentativeFindings(t *testing.T) {
 			why: "a difference between resolvers is as often a deliberate split as a fault, and no observation here separates the two",
 		},
 		{
-			matrixCase: "local device silent while this machine works", want: ConfidenceMedium,
+			matrixCase: "local device silent while this machine works", want: ConfidenceLow,
 			why: "a silent device is powered off, moved, or filtering, and none of those is distinguishable from this machine",
 		},
 		{
@@ -447,11 +459,10 @@ func TestConfidenceIsDocumented(t *testing.T) {
 	}
 }
 
-// Characterization of an open confidence-contract discrepancy, independent of
-// the lab. Do not silently turn this into approval of high causal confidence:
-// the same observations fit a target filter, a silent peer or a broken return
-// path. A deliberate inference fix must update this test and its explanation.
-func TestKnownTargetSilenceConfidence(t *testing.T) {
+// Independent of the lab: reference success cannot distinguish a target
+// filter, a silent peer or a broken return path. Refusal is a distinct observed
+// condition and must keep high confidence on otherwise identical evidence.
+func TestTargetSilenceConfidence(t *testing.T) {
 	target, err := ParseTarget("https://app.test")
 	if err != nil {
 		t.Fatal(err)
@@ -463,12 +474,12 @@ func TestKnownTargetSilenceConfidence(t *testing.T) {
 	}
 	order := []ProbeID{ProbeDNS, ProbeInternet, ProbeTargetTCP}
 	got := Interpret(target, order, results)
-	if len(got.Findings) != 1 || got.Findings[0].ID != DiagnosisTargetUnreachable || got.Findings[0].Confidence != ConfidenceHigh {
-		t.Fatalf("known confidence behavior changed; review the open finding: %+v", got)
+	if len(got.Findings) != 1 || got.Findings[0].ID != DiagnosisTargetUnreachable || got.Findings[0].Confidence != ConfidenceLow {
+		t.Fatalf("silent failure must retain its finding with low causal confidence: %+v", got)
 	}
-	f := got.Findings[0]
-	if unresolvedAlternative(f.Evidence) || missingDifferential(f.Evidence) || diagnosisConfidence[f.ID] != classObserved {
-		t.Fatal("minimal trigger no longer explains the high confidence")
+	results[ProbeTargetTCP] = ProbeResult{Status: StatusFail, Cause: ConnectionCauseRefused}
+	got = Interpret(target, order, results)
+	if len(got.Findings) != 1 || got.Findings[0].ID != DiagnosisTCPConnectionRefused || got.Findings[0].Confidence != ConfidenceHigh {
+		t.Fatalf("explicit refusal must retain high confidence: %+v", got)
 	}
-	t.Log("Known discrepancy: observed-class ceiling produces high without distinguishing the cause of silence")
 }

@@ -953,6 +953,14 @@ ruled out is still a live explanation and keeps a finding off `high`. Presence
 is what counts, never quantity: a second ruled-out alternative buys nothing the
 first did not.
 
+`target_unreachable` and `local_device_unreachable` have `low` confidence:
+reference egress cannot distinguish target filtering, routing or return-path
+failure from peer silence. This does not weaken the reachability observation.
+An explicit refusal remains an observed rejection, and successful versus failed
+family/address attempts remain observed contrasts; neither identifies the
+ultimate device or policy responsible. Protocol-stage stalls retain `medium`
+when a working connection narrows the failure to the later exchange.
+
 A few identities need one named exclusion on the record before they can reach
 `high`, because their supporting observation is not by itself the differential.
 `tls_certificate_expired` and `tls_certificate_not_yet_valid` are read against
@@ -1385,7 +1393,7 @@ Adding fields to the snapshot for the sake of a fuller comparison is deliberatel
 
 ## Two-sided diagnosis
 
-`--two-sided` asks which vantage point a failure is specific to, rather than what changed between two runs. It has two ways to obtain the same pair of canonical snapshots.
+`--two-sided` asks which vantage point observed a failure. It has two ways to obtain the same pair of canonical snapshots.
 
 The live form starts the same ordinary diagnosis on this machine and an SSH-accessible machine, as close together in time as practical, then applies the existing two-sided reading:
 
@@ -1439,6 +1447,13 @@ The two readings draw opposite conclusions from the same row moving. A check tha
 
 There is one rule `--two-sided` has that `--compare` does not: **two snapshots of different targets are refused with exit `2`.** A comparison of two endpoints is a question with an answer, and a localization across two endpoints is not, because a row that failed against one host and passed against another says nothing about which machine is at fault. Two generic runs with no target are one question asked from two places, so those are read.
 
+Target matching compares the logical host, port and protocol. Identical or
+overlapping DNS answers do not prove identical endpoint selection; disjoint
+answers can fully explain differing outcomes. Missing DNS evidence proves
+neither agreement nor disagreement. Even an IP literal or a common contacted
+address leaves endpoint policy, backend selection and capture-time changes
+possible. `side` locates the observation, never excludes an endpoint cause.
+
 [Support artifacts](#support-snapshots) follow from that rule rather than needing one of their own. Sanitization renames the target, and it assigns the same pseudonym to the same endpoint on both machines, so two `--support` artifacts of one target read normally and a sanitized file paired with a full-fidelity one is refused as two different targets. That is the right outcome either way: the pair whose names line up is the pair whose rows can be set against each other.
 
 ### What it reads, and what it refuses to read
@@ -1452,15 +1467,15 @@ Only rows **both machines measured** are read. `PASS`, `WARN`, and `FAIL` are me
 | ID | `side` | What the evidence proves |
 |----|--------|--------------------------|
 | `two_sided_no_failure` | `none` | no check that both machines measured failed on either of them |
-| `two_sided_one_side_fails` | `a` or `b` | every failed check passes from the other machine, so the failure is specific to that machine's vantage point |
-| `two_sided_one_side_fails_more` | `a` or `b` | some checks fail from both machines and one fails others besides, so at least one failure is specific to that machine |
+| `two_sided_one_side_fails` | `a` or `b` | every failed check passes from the other machine; failure was observed only from this vantage, without locating its cause |
+| `two_sided_one_side_fails_more` | `a` or `b` | some checks fail from both machines and one has additional observed failures; their causes remain open |
 | `two_sided_shared_failure` | `shared` | every failed check fails from both machines, which places it on neither one in particular |
 | `two_sided_divergent_failures` | `both` | each machine fails checks the other passes, which is two findings rather than one failure to place |
 | `two_sided_no_comparable_checks` | `unknown` | no check produced a measured outcome on both machines |
 
 ### What a placement does and does not prove
 
-"Specific to side A's vantage point" is the strongest claim two snapshots support, and it is narrower than it sounds. Side A's own network state, side A's path, and an endpoint that treats the two machines differently all produce exactly this evidence, so all of them are listed as alternatives and none is chosen. Every placement except an unqualified pass carries `ambiguous: true`.
+"Observed only from side A" identifies a difference in outcomes. Side A's own network state, its path, a different selected endpoint, and endpoint policy can all explain it, so placement does not choose among them. Every placement except an unqualified pass carries `ambiguous: true`.
 
 It never claims a firewall, router, NAT, VPN, or host is responsible. Two snapshots cannot establish that: they record what each machine observed, not what any device in between did. A `--two-sided` reading is a statement about **which machine**, never about **which box**.
 
@@ -1518,11 +1533,11 @@ Offline `--two-sided A.ndoc B.ndoc` needs no reachability and opens no connectio
   "diagnosis": {
     "id": "two_sided_one_side_fails",
     "side": "a",
-    "summary": "Every failed check passes from side B, so the failure is specific to side A's vantage point rather than to the endpoint alone.",
+    "summary": "Every failed check passes from side B, so failures were observed only from side A. This does not locate the cause on that side or exclude an endpoint-specific cause.",
     "evidence": ["target_tcp"],
     "ambiguous": true,
     "alternatives": ["side A's own network state", "side A's path to the endpoint",
-                     "the endpoint treating the two machines differently, by address or by policy",
+                     "endpoint-specific failure, including different servers behind the same name or different treatment by address or policy",
                      "the endpoint or the path changing between the two runs"]
   }
 }

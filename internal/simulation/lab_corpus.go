@@ -75,7 +75,6 @@ func LabScenarios() []LabScenario {
 	s.Faults = []LabFault{drop("target-port-drop", "transport", "target", "", "tcp", 443)}
 	expect(&s, d.VerdictService, d.DiagnosisTargetUnreachable, ExpectedCheck{ID: "target_tcp", Status: "FAIL"}, ExpectedCheck{ID: "tls", Status: "SKIP"})
 	s.Views[0].Expected.Confidence = []LabConfidence{{Finding: d.DiagnosisTargetUnreachable, Min: d.ConfidenceInsufficientEvidence, Max: d.ConfidenceLow}}
-	s.KnownIssues = []string{"client: confidence outside bounds: target_unreachable"}
 	s.BlindSpots = []string{"Silent filtering, silent server failure and a broken return path cannot be localized by a failed TCP connection."}
 	out = append(out, s)
 	s = healthy("proxy-required", "A proxy can reach the reference endpoint while client direct paths are filtered.", false)
@@ -158,9 +157,10 @@ func LabScenarios() []LabScenario {
 		}
 	}
 	s.Views[0].Expected = LabExpected{Verdict: d.VerdictService, Required: []d.DiagnosisID{d.DiagnosisTCPConnectionRefused, d.DiagnosisDNSDisagreement}}
-	s.TwoSided = compare.SideUnknown
-	s.KnownIssues = []string{"two-sided: want unknown, got a"}
-	s.BlindSpots = []string{"Disjoint resolved addresses mean these target rows did not measure one endpoint. The current two-sided result still excludes the endpoint alone as the cause."}
+	// Side is the observed failing vantage, not endpoint or path causation.
+	// Disjoint endpoints do not erase the measured failure on A alone.
+	s.TwoSided = compare.SideA
+	s.BlindSpots = []string{"Disjoint resolved addresses mean these target rows did not measure one endpoint. Side A identifies the failing observation; endpoint-specific failure remains possible."}
 	out = append(out, s)
 	s = healthy("dns-nxdomain", "Only the target name is absent from both resolvers; connectivity control names still exist.", false)
 	for _, name := range []string{"system-dns", "public-dns"} {
@@ -222,9 +222,6 @@ func LabScenarios() []LabScenario {
 					}
 				}
 			}
-		}
-		if out[i].Name == "asymmetric-routing" {
-			out[i].KnownIssues = []string{"client: confidence outside bounds: target_unreachable"}
 		}
 	}
 	return out

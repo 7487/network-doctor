@@ -23,8 +23,8 @@ uses the standard Go flag formatting.
 
 Exit codes retain the simulator convention: 0 means semantic validation
 passed, 1 means it failed, 2 means invalid arguments, and 3 means the model
-could not run. **The initial corpus has three failing scenarios for two known production findings, so
-`lab run --all` exits 1.** A test that successfully reproduces a known failure
+could not run. The current 20-case corpus passes semantic validation, so
+`lab run --all` exits 0. A test that successfully reproduces a known failure
 does not make that scenario pass. The CLI prints every failure normally.
 
 The JSON output is an experimental dump of internal lab types, with no new
@@ -210,30 +210,29 @@ Known corpus failures are listed as exact validation problems in
 no others, so a fix requires review of the now-stale entry. `RunLab` never reads
 that list, and the CLI never suppresses its failures.
 
-## Diagnostic findings exposed
+## Diagnostic findings corrected
 
-These are current production reasoning issues, separate from model defects:
+The initial corpus exposed two production reasoning issues:
 
-1. **Target-failure confidence calibration.** `tcp-port-blocked` and `asymmetric-routing` establish a
-   TCP timeout with healthy DNS and reference controls, not the location or
-   cause of the silent failure. The corpus permits at most `low` causal
-   confidence. Production classifies `target_unreachable` as observed and gives
-   it `high`, despite leaving remote service, filtering and routing open in the
-   explanation. The finding's reachability statement is correct; the issue is
-   confidence as an explanation of why, as defined in the reference. This is a
-   calibration judgment, not proof that the endpoint was reachable.
-2. **Two-sided endpoint exclusion with split DNS.** In `unrelated-dns-failure`,
-   side A reaches a different server with no TLS listener, while side B reaches
-   the healthy server. The endpoint alone explains the failure. Production
-   matches the target hostname, marks target checks comparable, and concludes
-   that the failure is specific to side A's vantage rather than the endpoint
-   alone. The ambiguity flag does not repair that unsupported exclusion. The
-   lab expects unknown endpoint localization and reports the current side A
-   result as a failure. Address overlap is already present in the snapshots;
-   conservative comparison could use it without adding a probe.
+1. **Target-silence confidence.** Healthy DNS and reference egress do not
+   distinguish filtering, target-specific routing, lost replies or server
+   silence. `target_unreachable` now has `low` causal confidence, as does the
+   equivalent local-device silence finding. Explicit refusal and measured
+   family/address contrasts retain their stronger, narrower claims.
+2. **Two-sided endpoint exclusion.** Matching a hostname does not establish
+   that the two views contacted the same server. Both one-sided summaries now
+   describe where failure was observed and leave endpoint-specific causes open.
+   This also applies when failures are shared on some rows but differ on others.
+   Even a common contacted address cannot exclude backend selection, endpoint
+   policy or changes between captures.
 
-Neither production rule was changed. These findings should be reviewed on
-their own merits rather than repaired simply to make the corpus green.
+The `unrelated-dns-failure` expectation changed from `unknown` to side `a`:
+`side` identifies the observed failing vantage, not the location of the cause.
+The original expectation conflated those claims. Side A's refusal is still
+observable with disjoint DNS; endpoint exclusion is the unsupported conclusion.
+Independent production tests cover DNS overlap, missing address evidence,
+common contacted addresses, IP literals, both argument orders and shared rows.
+No confidence bound was relaxed, and the obsolete known-issue entries were removed.
 
 ## Blind spots and useful additional evidence
 
@@ -285,10 +284,10 @@ Native-probe conformance tests cover healthy, failed-family, DNS timeout and
 portal observation classification. Real-socket tests remain in their existing
 integration lanes.
 
-## Initial corpus results
+## Corpus results
 
-All 20 scenarios execute and replay successfully. Seventeen satisfy their
-semantic expectations; three expose the two findings above. These are model results,
+All 20 scenarios execute, replay and satisfy their semantic expectations.
+These are model results,
 not measurements from a real broken network.
 
 | Scenario | Injected fault or configuration | Expected semantics | Observed result | Validation |
@@ -299,17 +298,17 @@ not measurements from a real broken network.
 | `dns-hijack` | rewrite-answer | degraded: dns_disagreement; confidence <= medium | degraded: dns_disagreement | PASS |
 | `ipv6-unavailable` | drop-ipv6 | degraded: direct_egress_degraded; configured IPv6 failure observed | degraded: direct_egress_degraded | PASS |
 | `reference-egress-unreachable` | reference-drop | degraded: reference_egress_unreachable | degraded: reference_egress_unreachable | PASS |
-| `tcp-port-blocked` | target-port-drop | service: target_unreachable; confidence <= low | service: target_unreachable; confidence high | FAIL |
+| `tcp-port-blocked` | target-port-drop | service: target_unreachable; confidence <= low | service: target_unreachable; confidence low | PASS |
 | `proxy-required` | client-direct-policy | network: proxy_only_network | network: proxy_only_network | PASS |
 | `captive-portal` | portal-interception | network: captive_portal | network: captive_portal | PASS |
 | `tls-certificate-mismatch` | wrong-certificate | service: tls_hostname_mismatch | service: tls_hostname_mismatch | PASS |
 | `mtu-blackhole` | narrow-silent-hop | network: probable_path_mtu_problem; confidence <= medium | network: probable_path_mtu_problem | PASS |
 | `vpn-split-tunnel` | Intentional specific route over VPN | ok | ok | PASS |
 | `vpn-dns-leak` | dns-outside-tunnel | ok | ok | PASS |
-| `asymmetric-routing` | wrong-return-gateway | client target_unreachable; confidence <= low<br>remote ok<br>side a | client target_unreachable; confidence high<br>remote ok<br>side a | FAIL |
+| `asymmetric-routing` | wrong-return-gateway | client target_unreachable; confidence <= low<br>remote ok<br>side a | client target_unreachable; confidence low<br>remote ok<br>side a | PASS |
 | `remote-side-broken` | remote-target-drop | client ok<br>remote service: tcp_connection_refused<br>side b | client ok<br>remote service: tcp_connection_refused<br>side b | PASS |
 | `unrelated-dns-answers` | split-dns-answer | client degraded: dns_disagreement<br>remote ok<br>side none | client degraded: dns_disagreement<br>remote ok<br>side none | PASS |
-| `unrelated-dns-failure` | split-dns-answer, decoy-listener-moved | client service: tcp_connection_refused, dns_disagreement<br>remote ok<br>side unknown | client service: tcp_connection_refused, dns_disagreement<br>remote ok<br>side a | FAIL |
+| `unrelated-dns-failure` | split-dns-answer, decoy-listener-moved | client service: tcp_connection_refused, dns_disagreement<br>remote ok<br>side a; endpoint cause open | client service: tcp_connection_refused, dns_disagreement<br>remote ok<br>side a; endpoint cause open | PASS |
 | `dns-nxdomain` | missing-name-system-dns, missing-name-public-dns | dns: dns_name_not_found | dns: dns_name_not_found | PASS |
 | `connection-refused` | No listener on requested port 8443 | service: tcp_connection_refused | service: tcp_connection_refused | PASS |
 | `tls-http-no-response` | silent-application | service: https_no_response | service: https_no_response | PASS |
@@ -341,12 +340,10 @@ the reported local refusal versus silence; both injected intents remain in truth
 Raw matched-fault indices refer to that order and are not compared across a
 reversal. No order-independent claim is made for conflicting replacements.
 
-The native `TestKnownTargetSilenceConfidence` and
-`TestKnownSplitDNSEndpointExclusion` tests reproduce the two production findings
-without importing Scenario Lab. They characterize current behavior and explicitly
-require review when it changes; they are not assertions that the conclusion is
-correct. The confidence mismatch affects both silent TCP corpus cases, hence
-three failing scenarios rather than three distinct production findings.
+The native `TestTargetSilenceConfidence` and
+`TestEndpointAlternativesSurviveTwoSidedPlacement` tests pin the corrected
+production behavior without importing Scenario Lab. The original characterization
+tests reproduced both defects before the production fixes.
 
 The observation boundary remains intentionally limited: it does not execute
 all live protocol bodies. Native conformance tests are a bounded cross-check,

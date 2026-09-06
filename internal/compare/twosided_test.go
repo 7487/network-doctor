@@ -470,41 +470,76 @@ func hasCaveat(got TwoSided, want string) bool {
 	return false
 }
 
-// No Scenario Lab model or interpreter participates. A names one failed server
-// and B names a different successful server. That does identify the failing
-// observation as A's, but cannot exclude an endpoint-specific failure.
-func TestKnownSplitDNSEndpointExclusion(t *testing.T) {
-	target := &snapshot.Target{Host: "app.test", Port: 443, Protocol: "tls+http"}
-	a := snapshot.Snapshot{Target: target, Checks: []snapshot.Check{
-		{ID: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: []string{"203.0.113.99"}}},
-		{ID: "target_tcp", Status: snapshot.StatusFail, Ran: true, Observed: &snapshot.Observed{Attempts: []snapshot.Attempt{{IP: "203.0.113.99", Cause: "connection_refused"}}}},
-	}}
-	b := snapshot.Snapshot{Target: target, Checks: []snapshot.Check{
-		{ID: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: []string{"93.184.216.34"}}},
-		{ID: "target_tcp", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{SelectedIP: "93.184.216.34"}},
-	}}
-	// Reproduction must be valid ordinary artifacts, not impossible input.
-	for _, s := range []*snapshot.Snapshot{&a, &b} {
-		s.Schema = snapshot.Schema
-		for i := range s.Checks {
-			s.Checks[i].Name = s.Checks[i].ID
-		}
-		if _, err := snapshot.Encode(*s); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got := twoSided(t, a, b)
-	if got.Diagnosis.Side != SideA || !rowFor(t, got, "target_tcp").Comparable || !strings.Contains(got.Diagnosis.Summary, "rather than to the endpoint alone") {
-		t.Fatalf("known endpoint-exclusion behavior changed; review the open finding: %+v", got)
-	}
-	// The comparator reads statuses and named-target identity only: removing
-	// address evidence cannot change its answer, which pins the missing guard.
-	for i := range a.Checks {
-		a.Checks[i].Observed = nil
-		b.Checks[i].Observed = nil
-	}
-	stripped := twoSided(t, a, b)
-	if stripped.Diagnosis.Summary != got.Diagnosis.Summary {
-		t.Fatal("address evidence now affects localization; review this characterization")
+// These are ordinary snapshot observations, independent of Scenario Lab.
+// DNS overlap is not proof of a common contacted endpoint. Even a shared
+// contacted address cannot exclude backend selection, policy or time changes.
+func TestEndpointAlternativesSurviveTwoSidedPlacement(t *testing.T) {
+	const first, second = "203.0.113.99", "93.184.216.34"
+	for _, tc := range []struct {
+		name                   string
+		dnsA, dnsB             []string
+		contactedA, contactedB string
+		literal                bool
+	}{
+		{"disjoint DNS", []string{first}, []string{second}, first, second, false},
+		{"identical DNS different selections", []string{first, second}, []string{first, second}, first, second, false},
+		{"overlapping DNS", []string{first, second}, []string{second}, first, second, false},
+		{"missing DNS", nil, []string{second}, "", second, false},
+		{"no address evidence", nil, nil, "", "", false},
+		{"same contacted address", []string{first, second}, []string{second}, second, second, false},
+		{"identical singleton DNS", []string{second}, []string{second}, second, second, false},
+		{"IP literal", nil, nil, second, second, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := &snapshot.Target{Host: "app.test", Port: 443, Protocol: "tls+http"}
+			if tc.literal {
+				target.Host, target.IP = second, second
+			}
+			a := snapshot.Snapshot{Schema: snapshot.Schema, Target: target, Checks: []snapshot.Check{
+				{ID: "dns", Name: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: tc.dnsA}},
+				{ID: "target_tcp", Name: "target_tcp", Status: snapshot.StatusFail, Ran: true},
+			}}
+			if tc.contactedA != "" {
+				a.Checks[1].Observed = &snapshot.Observed{Attempts: []snapshot.Attempt{{IP: tc.contactedA, Cause: "connection_refused"}}}
+			}
+			b := snapshot.Snapshot{Schema: snapshot.Schema, Target: target, Checks: []snapshot.Check{
+				{ID: "dns", Name: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: tc.dnsB}},
+				{ID: "target_tcp", Name: "target_tcp", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{SelectedIP: tc.contactedB}},
+			}}
+			for _, s := range []snapshot.Snapshot{a, b} {
+				if _, err := snapshot.Encode(s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, shared := range []bool{false, true} {
+				if shared {
+					a.Checks = append(a.Checks, snapshot.Check{ID: "tls", Status: snapshot.StatusFail})
+					b.Checks = append(b.Checks, snapshot.Check{ID: "tls", Status: snapshot.StatusFail})
+				}
+				for _, reverse := range []bool{false, true} {
+					left, right, want := a, b, SideA
+					if reverse {
+						left, right, want = b, a, SideB
+					}
+					got := twoSided(t, left, right)
+					if got.Diagnosis.Side != want || !rowFor(t, got, "target_tcp").Comparable {
+						t.Fatalf("lost observed failing side: %+v", got)
+					}
+					if !got.Diagnosis.Ambiguous || !strings.Contains(strings.Join(got.Diagnosis.Alternatives, " "), "endpoint-specific failure") {
+						t.Fatalf("endpoint explanation excluded: %+v", got.Diagnosis)
+					}
+					if strings.Contains(got.Diagnosis.Summary, "specific to side") || strings.Contains(got.Diagnosis.Summary, "rather than to the endpoint") {
+						t.Fatalf("observation became causal localization: %+v", got.Diagnosis)
+					}
+				}
+			}
+			// Different causes on the same failed row do not establish one shared cause.
+			b.Checks[1].Status = snapshot.StatusFail
+			b.Checks[1].Cause = "timeout"
+			got := twoSided(t, a, b)
+			if got.Diagnosis.Side != SideShared || !got.Diagnosis.Ambiguous || !strings.Contains(strings.Join(got.Diagnosis.Alternatives, " "), "different endpoints") {
+				t.Fatalf("same failed row became proof of a shared cause: %+v", got.Diagnosis)
+			}
+		})
 	}
 }

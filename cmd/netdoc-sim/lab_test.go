@@ -23,8 +23,8 @@ func TestLabCLIIsOfflineAndPreservesExitSemantics(t *testing.T) {
 		{[]string{"lab", "describe", "vpn-dns-leak"}, exitOK, "dns-outside-tunnel"},
 		{[]string{"lab", "run", "healthy-ipv4"}, exitOK, "Evidence support and semantic validation: PASS"},
 		{[]string{"lab", "run", "mtu-blackhole", "--trace"}, exitOK, "Simulator-only exchanges"},
-		{[]string{"lab", "run", "tcp-port-blocked"}, exitMismatch, "confidence outside bounds"},
-		{[]string{"lab", "run", "--all", "--json"}, exitMismatch, ""},
+		{[]string{"lab", "run", "tcp-port-blocked"}, exitOK, "Evidence support and semantic validation: PASS"},
+		{[]string{"lab", "run", "--all", "--json"}, exitOK, ""},
 		{[]string{"lab", "run", "--all", "healthy-ipv4"}, exitUsage, ""},
 		{[]string{"lab", "run"}, exitUsage, ""},
 		{[]string{"lab", "run", "missing"}, exitUsage, ""},
@@ -57,8 +57,8 @@ func TestLabCLIIsOfflineAndPreservesExitSemantics(t *testing.T) {
 						failures++
 					}
 				}
-				if failures != 3 {
-					t.Fatalf("known reasoning failure was hidden or new failures appeared: %d", failures)
+				if failures != 0 {
+					t.Fatalf("semantic validation failures: %d", failures)
 				}
 			}
 		})

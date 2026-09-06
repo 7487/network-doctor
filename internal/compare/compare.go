@@ -202,7 +202,7 @@ func targetDisplay(t *snapshot.Target) string {
 	return host + ":" + strconv.Itoa(t.Port) + " " + t.Protocol
 }
 
-// sameTarget answers whether the two runs observed the same endpoint. Raw is
+// sameTarget compares logical targets, not resolved or contacted addresses. Raw is
 // deliberately not part of it: the same host typed two ways is the same
 // target, and the difference in spelling is reported as its own change.
 func sameTarget(before, after *snapshot.Target) bool {
