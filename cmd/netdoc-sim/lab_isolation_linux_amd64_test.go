@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"runtime"
@@ -11,6 +12,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/heymaikol/network-doctor/internal/simulation"
 	"golang.org/x/sys/unix"
 )
 
@@ -39,12 +41,21 @@ func TestLabKernelIsolation(t *testing.T) {
 			_, _ = unix.Socket(unix.AF_INET, unix.SOCK_STREAM, 0)
 		case "file":
 			_, _ = os.Open("/etc/resolv.conf")
+		case "fuzz":
+			summary, err := simulation.RunLabFuzz(context.Background(), simulation.LabFuzzOptions{Seed: 847293, Cases: 32, MaxFaults: 4, Workers: 2, TwoSided: true})
+			if err != nil {
+				os.Exit(3)
+			}
+			if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
+				os.Exit(3)
+			}
+			os.Exit(0)
 		case "lab":
 			os.Exit(run([]string{"lab", "run", "--all", "--json"}, os.Stdout, os.Stderr))
 		}
 		os.Exit(99) // forbidden operation unexpectedly survived
 	}
-	for _, mode := range []string{"lab", "socket", "file"} {
+	for _, mode := range []string{"lab", "fuzz", "socket", "file"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -56,7 +67,22 @@ func TestLabKernelIsolation(t *testing.T) {
 			cmd.Stdout = &out
 			cmd.Stderr = &errOut
 			err := cmd.Run()
-			if mode == "lab" {
+			if mode == "fuzz" {
+				if err != nil {
+					t.Fatalf("isolated fuzzer: %v %s", err, errOut.String())
+				}
+				summary, err := simulation.RunLabFuzz(context.Background(), simulation.LabFuzzOptions{Seed: 847293, Cases: 32, MaxFaults: 4, Workers: 2, TwoSided: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var ordinary bytes.Buffer
+				if err := json.NewEncoder(&ordinary).Encode(summary); err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(out.Bytes(), ordinary.Bytes()) {
+					t.Fatal("kernel isolation changed fuzz report")
+				}
+			} else if mode == "lab" {
 				if cmd.ProcessState.ExitCode() != exitOK || !bytes.Contains(out.Bytes(), []byte(`"Scenario": "tls-http-no-response"`)) {
 					t.Fatalf("isolated lab: %v %s", err, errOut.String())
 				}

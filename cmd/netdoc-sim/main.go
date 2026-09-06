@@ -150,7 +150,7 @@ whether netdoc's diagnosis matched what the scenario broke.
 Commands:
   help                     print this help
   run <scenario> [flags]   build the network, run the tests, print the report
-  lab <command>           offline scenario lab: list, describe NAME, run NAME/--all
+  lab <command>           offline scenario lab: list, describe, run, fuzz
   campaign <scenario>      run a seeded scenario campaign sequentially
   hunt [base] [flags]      run deterministic bug-oracle or stress mutations
   hunt merge <files...>    merge a complete set of hunt shard JSON reports

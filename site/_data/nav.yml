@@ -31,6 +31,10 @@
       url: /docs/simulation-challenge/
     - title: Deterministic Scenario Lab
       url: /docs/scenario-lab/
+    - title: Diagnostic reasoning fuzzer
+      url: /docs/reasoning-fuzzer/
+    - title: Reasoning fuzzer campaign
+      url: /docs/reasoning-fuzzer-campaign/
     - title: Scenario authoring reference
       url: /docs/simulation-scenarios/
     - title: Hunts and triage reference

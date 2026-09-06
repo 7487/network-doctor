@@ -13,10 +13,12 @@ import (
 
 func runLab(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "usage: netdoc-sim lab list | describe NAME | run NAME | run --all")
+		fmt.Fprintln(errOut, "usage: netdoc-sim lab list | describe NAME | run NAME | run --all | fuzz [flags]")
 		return exitUsage
 	}
 	switch args[0] {
+	case "fuzz":
+		return runLabFuzz(ctx, args[1:], out, errOut)
 	case "list":
 		if len(args) != 1 {
 			return exitUsage

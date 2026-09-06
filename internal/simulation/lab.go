@@ -377,8 +377,17 @@ func confidenceRank(c diagnostic.Confidence) int {
 // It accepts a diagnosis separately so negative tests can inject unsupported
 // claims without changing the simulated evidence or the production engine.
 func ValidateLabDiagnosis(e LabExpected, s snapshot.Snapshot, d diagnostic.Diagnosis) []string {
+	return validateLabDiagnosis(e, s, d, true)
+}
+
+// ValidateLabEvidence checks provenance without authored verdict or finding expectations.
+func ValidateLabEvidence(s snapshot.Snapshot, d diagnostic.Diagnosis) []string {
+	return validateLabDiagnosis(LabExpected{}, s, d, false)
+}
+
+func validateLabDiagnosis(e LabExpected, s snapshot.Snapshot, d diagnostic.Diagnosis, authored bool) []string {
 	var problems []string
-	if d.Verdict != e.Verdict {
+	if authored && d.Verdict != e.Verdict {
 		problems = append(problems, fmt.Sprintf("verdict: want %s, got %s", e.Verdict, d.Verdict))
 	}
 	if len(d.Findings) > 0 && (d.Findings[0].Verdict != d.Verdict || d.Findings[0].Focus != d.Blamed) {
@@ -400,7 +409,7 @@ func ValidateLabDiagnosis(e LabExpected, s snapshot.Snapshot, d diagnostic.Diagn
 		if confidenceRank(f.Confidence) < 0 {
 			problems = append(problems, "invalid finding confidence: "+string(f.ID))
 		}
-		if slices.Contains(e.Forbidden, f.ID) || !slices.Contains(e.Required, f.ID) && !slices.Contains(e.Allowed, f.ID) {
+		if authored && (slices.Contains(e.Forbidden, f.ID) || !slices.Contains(e.Required, f.ID) && !slices.Contains(e.Allowed, f.ID)) {
 			problems = append(problems, "unsupported finding: "+string(f.ID))
 		}
 		support := false

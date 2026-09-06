@@ -33,6 +33,14 @@ existing `.ndoc` schema. Their fixed `2000-01-01` timestamp and `model` platform
 identify synthetic observations; they are not field captures. The lab does not
 write anything to `testdata/field` or claim real-network provenance.
 
+## Generated reasoning campaigns
+
+The [diagnostic reasoning fuzzer](reasoning-fuzzer.md) builds deterministic
+worlds, checks evidence-based properties, and minimizes reproducible failures.
+Run `go run ./cmd/netdoc-sim lab fuzz --seed 847293 --cases 10000`.
+It reuses this lab and does not change the authored corpus or infer expected
+diagnoses from simulator truth.
+
 ## Architecture and boundaries
 
 The repository already has these layers:
