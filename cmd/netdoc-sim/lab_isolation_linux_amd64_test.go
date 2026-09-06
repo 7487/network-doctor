@@ -23,15 +23,27 @@ import (
 func TestLabKernelIsolation(t *testing.T) {
 	if mode := os.Getenv("NETDOC_LAB_ISOLATION_HELPER"); mode != "" {
 		runtime.LockOSThread()
-		filter := []unix.SockFilter{{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0}}
-		for _, nr := range []uint32{unix.SYS_SOCKET, unix.SYS_SOCKETPAIR, unix.SYS_CONNECT, unix.SYS_OPEN, unix.SYS_CREAT, unix.SYS_OPENAT, unix.SYS_OPENAT2, unix.SYS_EXECVE, unix.SYS_EXECVEAT} {
+		blocked := [...]uint32{unix.SYS_SOCKET, unix.SYS_SOCKETPAIR, unix.SYS_CONNECT, unix.SYS_OPEN, unix.SYS_CREAT, unix.SYS_OPENAT, unix.SYS_OPENAT2, unix.SYS_EXECVE, unix.SYS_EXECVEAT}
+		// One load, two instructions per blocked call, one final allow. The
+		// array makes that a constant, so the program length seccomp is handed
+		// is a constant too rather than a narrowed slice length.
+		const programLen = 2 + 2*len(blocked)
+		filter := make([]unix.SockFilter, 0, programLen)
+		filter = append(filter, unix.SockFilter{Code: unix.BPF_LD | unix.BPF_W | unix.BPF_ABS, K: 0})
+		for _, nr := range blocked {
 			filter = append(filter, unix.SockFilter{Code: unix.BPF_JMP | unix.BPF_JEQ | unix.BPF_K, K: nr, Jf: 1}, unix.SockFilter{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_KILL_PROCESS})
 		}
 		filter = append(filter, unix.SockFilter{Code: unix.BPF_RET | unix.BPF_K, K: unix.SECCOMP_RET_ALLOW})
-		program := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]}
+		if len(filter) != programLen {
+			t.Fatalf("seccomp program is %d instructions, want %d", len(filter), programLen)
+		}
+		program := unix.SockFprog{Len: uint16(programLen), Filter: &filter[0]}
 		if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 			t.Fatal(err)
 		}
+		// #nosec G103 -- seccomp(2) takes the filter program by pointer, so
+		// installing one requires the address of this stack-local SockFprog.
+		// It stays live across the call, which returns before this returns.
 		_, _, errno := unix.RawSyscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, unix.SECCOMP_FILTER_FLAG_TSYNC, uintptr(unsafe.Pointer(&program)))
 		if errno != 0 {
 			t.Fatal(errno)
@@ -59,6 +71,9 @@ func TestLabKernelIsolation(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
+			// #nosec G204 G702 -- the child is this same test binary, os.Args[0],
+			// re-run with a literal -test.run filter. The helper mode it
+			// takes travels in the environment below, not in an argument.
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLabKernelIsolation$")
 			// Set these before startup: Go CPU polling and glibc's lazy malloc
 			// arena sizing can otherwise open CPU topology files after filtering.

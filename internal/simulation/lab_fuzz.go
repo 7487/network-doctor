@@ -46,16 +46,22 @@ func runLabFuzz(ctx context.Context, o LabFuzzOptions, evaluate labFuzzEvaluator
 		counts   map[string]int
 		err      error
 	}
+	// Validate bounds the campaign so that Start plus every case number below
+	// stays inside uint64; index carries that number so no signed batch
+	// arithmetic is converted into it.
+	index := o.Start
 	for base := 0; base < o.Cases; base += o.Workers {
 		size := min(o.Workers, o.Cases-base)
 		batch := make([]result, size)
 		var wg sync.WaitGroup
 		for i := range batch {
+			caseIndex := index
+			index++
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				x := &batch[i]
-				x.c, x.err = GenerateLabFuzz(o.Seed, o.Start+uint64(base+i), o.MaxFaults, o.TwoSided)
+				x.c, x.err = GenerateLabFuzz(o.Seed, caseIndex, o.MaxFaults, o.TwoSided)
 				if x.err == nil {
 					x.failures, x.counts, x.err = evaluate(ctx, x.c, o.Property)
 				}

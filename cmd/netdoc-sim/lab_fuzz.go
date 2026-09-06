@@ -19,6 +19,11 @@ func runLabFuzz(ctx context.Context, args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "usage: lab fuzz replay ARTIFACT")
 			return exitUsage
 		}
+		// #nosec G703 -- the artifact path is this command's argument: the
+		// operator names the failure artifact to replay, and the process has
+		// exactly the operator's own read access. There is no lesser
+		// privilege to escape from here, and reading is all that happens: the
+		// bytes below are size-limited and decoded as a fuzz artifact.
 		f, err := os.Open(args[1])
 		if err != nil {
 			fmt.Fprintln(errOut, err)

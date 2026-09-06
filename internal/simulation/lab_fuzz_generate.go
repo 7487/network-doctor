@@ -20,6 +20,11 @@ type LabFuzzCase struct {
 	Relation string // empty, or endpoint-vs-transit-silence
 }
 
+// labMaxInt is math.MaxInt as a uint64. It is spelled out rather than imported
+// because the lab model files pin their imports to the offline set the guard
+// test allows.
+const labMaxInt = uint64(^uint(0) >> 1)
+
 // SplitMix64, including overflow modulo 2^64, is part of reasoning-v1.
 type labRandom uint64
 
@@ -30,7 +35,17 @@ func (r *labRandom) next() uint64 {
 	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
 	return z ^ (z >> 31)
 }
-func (r *labRandom) n(n int) int { return int(r.next() % uint64(n)) }
+
+// n draws a value in [0,n). The bound is a positive count the generator
+// computed, so a non-positive one is a generator bug rather than input. The
+// remainder is already below that bound; the mask states the same limit to the
+// conversion and changes no drawn value.
+func (r *labRandom) n(n int) int {
+	if n <= 0 {
+		panic("lab fuzz generator: draw bound must be positive")
+	}
+	return int(r.next() % uint64(n) & labMaxInt)
+}
 
 func labCopy[T any](v T) T {
 	b, err := json.Marshal(v)
@@ -111,7 +126,7 @@ func GenerateLabFuzz(seed, index uint64, maxFaults int, twoSided bool) (LabFuzzC
 	choices = append(choices,
 		LabFault{ID: "link-down", Layer: "link", Scope: "client", Network: &Fault{Type: FaultLinkDown, Node: "client", Segment: "ethernet"}},
 		LabFault{ID: "no-default", Layer: "routing", Scope: "client", Network: &Fault{Type: FaultNoDefaultRoute, Node: "client", Family: routeFamily}},
-		LabFault{ID: "loss", Layer: "transport", Scope: "gateway", Network: &Fault{Type: FaultNetem, Node: "gateway", Segment: "uplink", Loss: fmt.Sprintf("%d%%", 1+r.n(60)), Seed: uint32(r.next())}},
+		LabFault{ID: "loss", Layer: "transport", Scope: "gateway", Network: &Fault{Type: FaultNetem, Node: "gateway", Segment: "uplink", Loss: fmt.Sprintf("%d%%", 1+r.n(60)), Seed: uint32(r.next() & 0xffffffff)}},
 	)
 	drop("system-dns-drop", "resolver", "", "udp", 53)
 	drop("public-dns-drop", "internet", "", "udp", 53)
@@ -143,9 +158,10 @@ func GenerateLabFuzz(seed, index uint64, maxFaults int, twoSided bool) (LabFuzzC
 				continue
 			}
 			layer := "http"
-			if svc.Type == ServiceDNS {
+			switch svc.Type {
+			case ServiceDNS:
 				layer = "dns"
-			} else if svc.Type == ServiceTLS {
+			case ServiceTLS:
 				layer = "tls"
 			}
 			choices = append(choices, LabFault{ID: "replace-" + svc.Name, Layer: layer, Scope: svc.Name, Service: &svc})

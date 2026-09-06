@@ -258,9 +258,10 @@ func labSideSemantics(t compare.TwoSided, swap bool) labSideMeaning {
 	}
 	// Replacement is simultaneous, including already substituted placeholders.
 	if swap {
-		if d.Side == compare.SideA {
+		switch d.Side {
+		case compare.SideA:
 			d.Side = compare.SideB
-		} else if d.Side == compare.SideB {
+		case compare.SideB:
 			d.Side = compare.SideA
 		}
 	}
