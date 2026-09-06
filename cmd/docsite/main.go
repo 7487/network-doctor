@@ -20,8 +20,9 @@
 //     rewrites most of them, but it matches a link on one line and this
 //     documentation wraps its prose, so the ones split across a newline are
 //     silently left pointing at a .md file the site does not serve;
-//   - links out of docs/ ("../README.md") name files the site does not
-//     publish, and belong on github.com.
+//   - the remaining relative links in docs/ ("../README.md", or a sibling
+//     data file a page cites) name files the site does not publish, and
+//     belong on github.com.
 //
 // Those are rewritten here rather than being littered into the sources with
 // environment-specific hacks, and a link that names nothing fails the build.
@@ -232,9 +233,12 @@ func (s *stager) fixLink(section, target string) (string, error) {
 	case section == "docs" && !strings.Contains(link, "/") && path.Ext(link) == ".md":
 		return s.docsLink(strings.TrimSuffix(link, ".md"), frag)
 
-	// A relative link out of docs/. It names a file the site does not publish,
-	// so it goes to the repository, where that file is authoritative.
-	case section == "docs" && strings.HasPrefix(link, "../"):
+	// Any other relative link from docs/. It names a repository file rather
+	// than a published page: something above docs/, or a sibling that is not
+	// one of its Markdown pages, such as a data file a page cites. The site
+	// does not serve those, so they go to the repository, where the file is
+	// authoritative.
+	case section == "docs":
 		rel := path.Clean(path.Join(filepath.ToSlash(s.docsDir), link))
 		if strings.HasPrefix(rel, "..") {
 			return "", fmt.Errorf("link %q escapes the repository", target)

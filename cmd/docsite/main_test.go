@@ -13,7 +13,7 @@ import (
 // metadata are the GitHub Pages plugin set's job and are not restated here.
 
 // fixture writes a miniature repository: a Jekyll shell, two repository docs,
-// three wiki pages, and a file that is linked to but never published.
+// three wiki pages, and two files that are linked to but never published.
 func fixture(t *testing.T) (docs, wiki, shell string) {
 	t.Helper()
 	root := t.TempDir()
@@ -28,12 +28,13 @@ func fixture(t *testing.T) (docs, wiki, shell string) {
 		}
 	}
 	write("site/_config.yml", "baseurl: /network-doctor\n")
-	write("docs/reference.md", "# Reference\n\nSee [scenarios](scenarios.md#authoring) and the [README](../README.md).\n")
+	write("docs/reference.md", "# Reference\n\nSee [scenarios](scenarios.md#authoring), the [receipt](receipt.json) and the [README](../README.md).\n")
 	write("docs/scenarios.md", "# Scenarios\n\n## Authoring\n\nBody.\n")
 	write("wiki/Home.md", "# Wiki\n\nStart at [Getting Started](Getting-Started).\n")
 	write("wiki/Getting-Started.md", "# Getting Started\n\nBack to [Home](Home), on to [Challenge Mode](Challenge-Mode#scoring).\n")
 	write("wiki/Challenge-Mode.md", "# Challenge Mode\n\n## Scoring\n\nBody.\n")
 	write("wiki/_Sidebar.md", "wiki chrome\n")
+	write("docs/receipt.json", "{}\n")
 	write("README.md", "# Network Doctor\n")
 	write("assets/hero.gif", "gif")
 	write("assets/social-preview.png", "png")
@@ -99,6 +100,10 @@ func TestRewritesOnlyTheLinksJekyllCannotResolve(t *testing.T) {
 		{"wiki/Getting-Started.md", "[Home](/network-doctor/)"},
 		// A link out of docs/ names a file the site does not publish.
 		{"docs/reference.md", "[README](" + repoURL + "/blob/main/README.md)"},
+		// So does a sibling data file: docs/ publishes its Markdown pages,
+		// and a page that cites a receipt beside them still has to link to
+		// the copy the repository serves.
+		{"docs/reference.md", "[receipt](" + repoURL + "/blob/main/docs/receipt.json)"},
 		// A docs cross-link names a file; the site serves a URL.
 		{"docs/reference.md", "[scenarios](/network-doctor/docs/scenarios/#authoring)"},
 	} {
@@ -118,6 +123,8 @@ func TestBrokenSourcesFailTheBuild(t *testing.T) {
 			"# Reference\n\n[gone](removed.md)\n", "docs/removed.md"},
 		{"link out of docs to a file that does not exist", "docs/reference.md",
 			"# Reference\n\n[gone](../NOPE.md)\n", "does not exist"},
+		{"link to a docs data file that does not exist", "docs/reference.md",
+			"# Reference\n\n[gone](gone.json)\n", "does not exist"},
 		{"link that escapes the repository", "docs/reference.md",
 			"# Reference\n\n[out](../../etc/passwd)\n", "escapes the repository"},
 	} {
