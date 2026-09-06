@@ -95,6 +95,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	case "run":
 		return launch(ctx, args, stdout, stderr)
+	case "lab":
+		return runLab(ctx, args[1:], stdout, stderr)
 	case "campaign":
 		return launchCampaign(ctx, args[1:], stdout, stderr)
 	case "hunt":
@@ -148,6 +150,7 @@ whether netdoc's diagnosis matched what the scenario broke.
 Commands:
   help                     print this help
   run <scenario> [flags]   build the network, run the tests, print the report
+  lab <command>           offline scenario lab: list, describe NAME, run NAME/--all
   campaign <scenario>      run a seeded scenario campaign sequentially
   hunt [base] [flags]      run deterministic bug-oracle or stress mutations
   hunt merge <files...>    merge a complete set of hunt shard JSON reports
@@ -164,6 +167,11 @@ Commands:
   version                  print the build version, the same one netdoc reports
 
 A <scenario> is a built-in name or a path to a YAML file.
+
+Flags for lab run:
+  -all                     run every built-in lab scenario
+  -json                    print experimental lab JSON
+  -trace                   include simulator-only packet paths
 
 Flags for run:
   -json                    print the machine-readable report instead of text

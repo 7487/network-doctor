@@ -1,5 +1,9 @@
 # Network simulation (`netdoc-sim`)
 
+For deterministic reasoning tests without networking or Linux namespaces, see
+the [Scenario Lab](scenario-lab.md): `netdoc-sim lab run --all`. The existing
+namespace commands below continue to test the real probe implementations.
+
 `netdoc-sim` builds a throwaway virtual network from a YAML scenario, breaks it
 on purpose, runs the real netdoc binary inside it, and reports whether netdoc's
 diagnosis matched the injected fault.
@@ -46,8 +50,8 @@ netdoc-sim validate broken-dns
 netdoc-sim run broken-dns
 ```
 
-Linux only. The binary is not in the macOS or Windows downloads, because the
-backend is Linux namespaces and there is no other one; see
+The namespace backend is Linux only. The binary is not in the macOS or Windows
+downloads. Contributors can build the offline Scenario Lab on either platform; see
 [Limitations](#limitations). On macOS and Windows, run the published image
 through a Linux container runtime instead; see [Running it in a
 container](#running-it-in-a-container).

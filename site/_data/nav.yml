@@ -29,6 +29,8 @@
       url: /docs/simulation/
     - title: Challenge Mode reference
       url: /docs/simulation-challenge/
+    - title: Deterministic Scenario Lab
+      url: /docs/scenario-lab/
     - title: Scenario authoring reference
       url: /docs/simulation-scenarios/
     - title: Hunts and triage reference

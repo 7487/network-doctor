@@ -13,6 +13,12 @@ _netdoc_sim_scenarios() {
   (( $#names )) && _describe -t scenarios 'scenario' names
 }
 
+_netdoc_sim_lab_scenarios() {
+  local -a names
+  names=(${(f)"$(netdoc-sim lab list 2>/dev/null | awk '{print $1}')"})
+  (( $#names )) && _describe -t scenarios 'lab scenario' names
+}
+
 # No -s anywhere below: it would let single-letter options stack, and the
 # single-dash long spellings (-json) would be read as stacked letters.
 local state
@@ -24,6 +30,7 @@ commands=(
   'triage:hunt the fixed baselines, reproduce findings, file issues'
   'challenge:diagnose a hidden fault yourself, then let netdoc try'
   'validate:parse and check a scenario without building anything'
+  'lab:offline scenario lab (list, describe, run)'
   'scenarios:list the built-in scenarios'
   'starters:list the curated starter packs, or one pack'"'"'s challenges'
   'authored:list the hand-written challenges and their ids'
@@ -43,6 +50,22 @@ case $state in
     ;;
   args)
     case $words[1] in
+    lab)
+      if (( CURRENT == 2 )); then
+        _values 'lab command' list describe run
+      else
+        case $words[2] in
+          run)
+            _arguments \
+              '(--all -all)'{--all,-all}'[run every lab scenario]' \
+              '(--json -json)'{--json,-json}'[print experimental lab JSON]' \
+              '(--trace -trace)'{--trace,-trace}'[print simulator-only paths]' \
+              '1:lab command:(run)' ':scenario:_netdoc_sim_lab_scenarios'
+            ;;
+          describe) _arguments '1:lab command:(describe)' ':scenario:_netdoc_sim_lab_scenarios' ;;
+        esac
+      fi
+      ;;
     run)
       _arguments \
         '(--json -json)'{--json,-json}'[print the machine-readable report]' \

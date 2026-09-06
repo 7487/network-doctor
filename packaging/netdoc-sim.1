@@ -1,4 +1,4 @@
-.TH NETDOC\-SIM 1 "2026-08-23" "network-doctor" "User Commands"
+.TH NETDOC\-SIM 1 "2026-09-05" "network-doctor" "User Commands"
 .SH NAME
 netdoc\-sim \- build throwaway virtual networks, run netdoc inside them, and score the diagnosis
 .SH SYNOPSIS
@@ -22,9 +22,8 @@ returns. Run
 .B netdoc\-sim capabilities
 to see what a run does on this machine and whether it can run at all.
 .PP
-The only backend that can build a network is Linux namespaces. On other
-systems every command that would simulate reports that the host is
-unsupported.
+The only backend that builds a live network is Linux namespaces.
+The separate Scenario Lab models observations in memory on Linux, macOS and Windows, without namespaces, network access, or a separate netdoc binary.
 .PP
 Each command parses its own flags. Flags may be given before or after a
 command's positional argument, and each accepts both the single-dash and
@@ -34,6 +33,21 @@ and
 .B \-\-json
 are the same flag).
 .SH COMMANDS
+.TP
+.BI lab " command"
+Run the deterministic, offline Scenario Lab. Commands are
+.BR "list" ,
+.BI "describe " NAME ,
+.BI "run " NAME ,
+and
+.BR "run --all" .
+Lab run accepts
+.B \-json
+for experimental machine-readable results and
+.B \-trace
+for simulator-only packet paths. Results distinguish injected truth,
+observed evidence, production diagnosis, semantic expectations, and validation.
+Exit 1 includes known reasoning failures; these are never silently waived.
 .TP
 .BI run " scenario"
 Build the network, run the scenario's tests through
@@ -135,6 +149,16 @@ and
 flag, not a
 .B run
 flag. The commands not named below take no flags.
+.SS lab run
+.TP
+.B \-all
+Run every built-in Scenario Lab case.
+.TP
+.B \-json
+Print experimental internal lab JSON.
+.TP
+.B \-trace
+Include simulator-only packet paths.
 .SS run
 .TP
 .B \-json

@@ -446,3 +446,29 @@ func TestConfidenceIsDocumented(t *testing.T) {
 		}
 	}
 }
+
+// Characterization of an open confidence-contract discrepancy, independent of
+// the lab. Do not silently turn this into approval of high causal confidence:
+// the same observations fit a target filter, a silent peer or a broken return
+// path. A deliberate inference fix must update this test and its explanation.
+func TestKnownTargetSilenceConfidence(t *testing.T) {
+	target, err := ParseTarget("https://app.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := map[ProbeID]ProbeResult{
+		ProbeDNS:       {Status: StatusPass, Addrs: []net.IP{net.ParseIP("93.184.216.34")}},
+		ProbeInternet:  {Status: StatusPass},
+		ProbeTargetTCP: {Status: StatusFail},
+	}
+	order := []ProbeID{ProbeDNS, ProbeInternet, ProbeTargetTCP}
+	got := Interpret(target, order, results)
+	if len(got.Findings) != 1 || got.Findings[0].ID != DiagnosisTargetUnreachable || got.Findings[0].Confidence != ConfidenceHigh {
+		t.Fatalf("known confidence behavior changed; review the open finding: %+v", got)
+	}
+	f := got.Findings[0]
+	if unresolvedAlternative(f.Evidence) || missingDifferential(f.Evidence) || diagnosisConfidence[f.ID] != classObserved {
+		t.Fatal("minimal trigger no longer explains the high confidence")
+	}
+	t.Log("Known discrepancy: observed-class ceiling produces high without distinguishing the cause of silence")
+}

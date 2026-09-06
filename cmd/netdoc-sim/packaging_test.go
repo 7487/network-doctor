@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"go/ast"
 	"go/parser"
@@ -129,6 +130,18 @@ func commandFlags(t *testing.T) map[string][]string {
 		})
 		slices.Sort(names)
 		out[command] = names
+	}
+	// Lab is nested and constructs its flag set inline. Read standard help
+	// from the real parser rather than maintaining a second flag list.
+	var help strings.Builder
+	if code := runLab(context.Background(), []string{"run", "-h"}, io.Discard, &help); code != exitOK {
+		t.Fatal("lab help failed")
+	}
+	for _, match := range regexp.MustCompile(`(?m)^  -([a-z-]+)`).FindAllStringSubmatch(help.String(), -1) {
+		out["lab run"] = append(out["lab run"], match[1])
+	}
+	if len(out["lab run"]) == 0 {
+		t.Fatal("parsed no lab flags")
 	}
 	return out
 }
@@ -296,7 +309,7 @@ func renderedUsage(t *testing.T) string {
 
 var (
 	bashCommandList = regexp.MustCompile(`(?s)_netdoc_sim_commands="([^"]*)"`)
-	bashFlagList    = regexp.MustCompile(`(?m)^\s+([a-z-]+)\)\s+echo "([^"]*)"`)
+	bashFlagList    = regexp.MustCompile(`(?m)^\s+"?([a-z][a-z -]*)"?\)\s+echo "([^"]*)"`)
 )
 
 func bashCommands(data string) []string {
@@ -350,6 +363,12 @@ func zshFlags(data string) map[string][]string {
 		if command == "" {
 			continue
 		}
+		if strings.HasPrefix(command, "lab") && strings.HasPrefix(strings.TrimSpace(line), "describe)") {
+			command = "lab describe"
+		}
+		if command == "lab" && strings.TrimSpace(line) == "run)" {
+			command = "lab run"
+		}
 		for _, m := range zshOptionSpec.FindAllStringSubmatch(line, -1) {
 			out[command] = append(out[command], m[1])
 		}
@@ -360,7 +379,7 @@ func zshFlags(data string) map[string][]string {
 	return out
 }
 
-var fishCondition = regexp.MustCompile(`__fish_seen_subcommand_from ([^']*)'`)
+var fishCondition = regexp.MustCompile(`__fish_seen_subcommand_from ([a-z ]+)`)
 
 // quoted strips the quoted runs of a fish complete line, so a word inside a
 // description can never be mistaken for one of the line's own options.
@@ -397,9 +416,20 @@ func fishFlags(data string) map[string][]string {
 		if !strings.HasPrefix(line, "complete ") {
 			continue
 		}
-		m := fishCondition.FindStringSubmatch(line)
+		// The old root conditions exclude lab before testing their root
+		// command; lab's positive condition scopes its nested run separately.
+		condition := strings.ReplaceAll(line, "not __fish_seen_subcommand_from lab; and ", "")
+		m := fishCondition.FindStringSubmatch(condition)
 		name := fishToken(line, "-l")
 		if m == nil || name == "" {
+			continue
+		}
+		if strings.TrimSpace(m[1]) == "lab" {
+			if strings.Contains(condition, "; and __fish_seen_subcommand_from run'") {
+				out["lab run"] = append(out["lab run"], name)
+			} else {
+				out["lab"] = append(out["lab"], name)
+			}
 			continue
 		}
 		for _, command := range strings.Fields(m[1]) {
@@ -513,6 +543,9 @@ func TestShippedSurfacesDeclareExactlyTheRealFlagsPerCommand(t *testing.T) {
 		// options for a command that takes none is drift in the other
 		// direction.
 		checked := slices.Clone(commands)
+		for command := range want {
+			checked = append(checked, command)
+		}
 		for command := range got {
 			checked = append(checked, command)
 		}

@@ -469,3 +469,42 @@ func hasCaveat(got TwoSided, want string) bool {
 	}
 	return false
 }
+
+// No Scenario Lab model or interpreter participates. A names one failed server
+// and B names a different successful server. That does identify the failing
+// observation as A's, but cannot exclude an endpoint-specific failure.
+func TestKnownSplitDNSEndpointExclusion(t *testing.T) {
+	target := &snapshot.Target{Host: "app.test", Port: 443, Protocol: "tls+http"}
+	a := snapshot.Snapshot{Target: target, Checks: []snapshot.Check{
+		{ID: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: []string{"203.0.113.99"}}},
+		{ID: "target_tcp", Status: snapshot.StatusFail, Ran: true, Observed: &snapshot.Observed{Attempts: []snapshot.Attempt{{IP: "203.0.113.99", Cause: "connection_refused"}}}},
+	}}
+	b := snapshot.Snapshot{Target: target, Checks: []snapshot.Check{
+		{ID: "dns", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{Addresses: []string{"93.184.216.34"}}},
+		{ID: "target_tcp", Status: snapshot.StatusPass, Ran: true, Observed: &snapshot.Observed{SelectedIP: "93.184.216.34"}},
+	}}
+	// Reproduction must be valid ordinary artifacts, not impossible input.
+	for _, s := range []*snapshot.Snapshot{&a, &b} {
+		s.Schema = snapshot.Schema
+		for i := range s.Checks {
+			s.Checks[i].Name = s.Checks[i].ID
+		}
+		if _, err := snapshot.Encode(*s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := twoSided(t, a, b)
+	if got.Diagnosis.Side != SideA || !rowFor(t, got, "target_tcp").Comparable || !strings.Contains(got.Diagnosis.Summary, "rather than to the endpoint alone") {
+		t.Fatalf("known endpoint-exclusion behavior changed; review the open finding: %+v", got)
+	}
+	// The comparator reads statuses and named-target identity only: removing
+	// address evidence cannot change its answer, which pins the missing guard.
+	for i := range a.Checks {
+		a.Checks[i].Observed = nil
+		b.Checks[i].Observed = nil
+	}
+	stripped := twoSided(t, a, b)
+	if stripped.Diagnosis.Summary != got.Diagnosis.Summary {
+		t.Fatal("address evidence now affects localization; review this characterization")
+	}
+}

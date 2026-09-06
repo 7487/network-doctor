@@ -3,7 +3,7 @@
 # Hand-maintained: netdoc-sim uses the stdlib flag package, which has no
 # completion generator. Keep this in sync with the flag sets in cmd/netdoc-sim.
 
-_netdoc_sim_commands="run campaign hunt triage challenge validate scenarios
+_netdoc_sim_commands="run lab campaign hunt triage challenge validate scenarios
 starters authored capabilities list inspect cleanup version help"
 
 # Bare flag names, per command. Each is spelled both ways below, because the
@@ -17,6 +17,7 @@ _netdoc_sim_flags() {
         triage) echo "json scenarios cases hunt-results seed max-faults lane min-severity create context revision netdoc timeout v" ;;
         challenge) echo "id difficulty daily starter authored answer give-up json netdoc timeout v" ;;
         cleanup) echo "all" ;;
+        "lab run") echo "all json trace" ;;
     esac
 }
 
@@ -32,6 +33,18 @@ _netdoc_sim() {
         return
     fi
     cmd=${COMP_WORDS[1]}
+    if [[ $cmd == lab ]]; then
+        if ((COMP_CWORD == 2)); then
+            COMPREPLY=($(compgen -W "list describe run" -- "$cur"))
+        elif [[ ${COMP_WORDS[2]} == run && $cur == -* ]]; then
+            words=""
+            for flag in $(_netdoc_sim_flags "lab run"); do words+=" -$flag --$flag"; done
+            COMPREPLY=($(compgen -W "$words" -- "$cur"))
+        elif [[ ${COMP_WORDS[2]} == run || ${COMP_WORDS[2]} == describe ]]; then
+            COMPREPLY=($(compgen -W "$(netdoc-sim lab list 2>/dev/null | awk '{print $1}')" -- "$cur"))
+        fi
+        return
+    fi
 
     case $prev in
         -netdoc | --netdoc)

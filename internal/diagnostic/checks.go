@@ -203,6 +203,17 @@ type ProbeResult struct {
 	ifaceAmbiguous bool
 }
 
+// SetProtocolTimeout records a protocol exchange timing out, independently of
+// its status or failure cause. Observation producers use this same fact for
+// HTTP/HTTPS, whose failures have no TLS-style timeout cause.
+func (r *ProbeResult) SetProtocolTimeout(timedOut bool) { r.timedOut = timedOut }
+
+// SetFailureCause records a classified failure and the address family that
+// supplied it. An empty family records a family-neutral observation.
+func (r *ProbeResult) SetFailureCause(cause, family string) {
+	r.Cause, r.causeFamily = cause, family
+}
+
 // Portal is structured captive-portal evidence. RedirectURL is empty when the
 // interception did not advertise a valid HTTP(S) sign-in URL.
 type Portal struct {
@@ -545,6 +556,17 @@ func BuildProbesFromSources(t *Target, sources *SourceAddresses, publicDNS strin
 	probes := o.buildProbes(t, publicDNS, publicDNSAuto)
 	for i := range probes {
 		probes[i].Run = wrapRun(probes[i].Run)
+	}
+	return probes
+}
+
+// ProbePlan returns the production graph's metadata without executable probe
+// bodies or host operations. Offline observation producers must supply every
+// Run themselves; an unsupported new row cannot fall back to a live probe.
+func ProbePlan(t *Target, publicDNS string, publicDNSAuto bool) []Probe {
+	probes := new(netops).buildProbes(t, publicDNS, publicDNSAuto)
+	for i := range probes {
+		probes[i].Run = nil
 	}
 	return probes
 }
