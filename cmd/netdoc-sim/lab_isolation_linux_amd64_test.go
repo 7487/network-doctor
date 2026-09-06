@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -22,6 +24,12 @@ import (
 // No network syscall reaches the kernel's network implementation.
 func TestLabKernelIsolation(t *testing.T) {
 	if mode := os.Getenv("NETDOC_LAB_ISOLATION_HELPER"); mode != "" {
+		// The filter outlives this process, so anything the runtime defers to
+		// exit runs under it. Coverage data emission is one such hook, and it
+		// opens files, so refuse to filter a child that would attempt it.
+		if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+			t.Fatalf("GOCOVERDIR=%s reached the isolated child: its exit hook writes coverage files the filter must kill", dir)
+		}
 		runtime.LockOSThread()
 		blocked := [...]uint32{unix.SYS_SOCKET, unix.SYS_SOCKETPAIR, unix.SYS_CONNECT, unix.SYS_OPEN, unix.SYS_CREAT, unix.SYS_OPENAT, unix.SYS_OPENAT2, unix.SYS_EXECVE, unix.SYS_EXECVEAT}
 		// One load, two instructions per blocked call, one final allow. The
@@ -77,7 +85,12 @@ func TestLabKernelIsolation(t *testing.T) {
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLabKernelIsolation$")
 			// Set these before startup: Go CPU polling and glibc's lazy malloc
 			// arena sizing can otherwise open CPU topology files after filtering.
-			cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "MALLOC_ARENA_MAX=2", "NETDOC_LAB_ISOLATION_HELPER="+mode, "HTTPS_PROXY=http://unresolvable.invalid:1", "ALL_PROXY=socks5://unresolvable.invalid:1")
+			// go test -cover exports GOCOVERDIR so subprocesses emit coverage
+			// too. That emission is an openat from a runtime exit hook, long
+			// after the filter is installed, and the child's counters duplicate
+			// the in-process rerun below, so drop the variable.
+			env := slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "GOCOVERDIR=") })
+			cmd.Env = append(env, "GOMAXPROCS=2", "MALLOC_ARENA_MAX=2", "NETDOC_LAB_ISOLATION_HELPER="+mode, "HTTPS_PROXY=http://unresolvable.invalid:1", "ALL_PROXY=socks5://unresolvable.invalid:1")
 			var out, errOut bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &errOut
