@@ -30,8 +30,17 @@ complete -c netdoc -o via -l via -r -f \
     -a '(__fish_print_hostnames)' \
     -d 'Run remotely, or provide side B for live two-sided diagnosis'
 complete -c netdoc -o list-checks -l list-checks -d 'List stable probe IDs and names, then exit'
-complete -c netdoc -o check -l check -r -d 'Run stable probe IDs (comma-separated; repeatable)'
-complete -c netdoc -o skip -l skip -r -d 'Skip stable probe IDs (comma-separated; repeatable)'
+# Stable probe IDs. Both flags take a comma-separated list, which a plain
+# `complete -a` cannot complete: it replaces the whole token, so the elements
+# already typed are lost. __fish_complete_list splits the token on the comma
+# and keeps that prefix. -f suppresses the file completion these two flags
+# would otherwise inherit. Kept in sync with StableProbes() by the packaging
+# test.
+set -l netdoc_probes iface internet_tcp quic_udp_443 proxy_connect dns dns_public dns_encrypted target_tcp path_mtu ssid tls http https ssh_banner smtp_banner
+complete -c netdoc -o check -l check -r -f -d 'Run stable probe IDs (comma-separated; repeatable)' \
+    -a "(__fish_complete_list , \"printf '%s\n' $netdoc_probes\")"
+complete -c netdoc -o skip -l skip -r -f -d 'Skip stable probe IDs (comma-separated; repeatable)' \
+    -a "(__fish_complete_list , \"printf '%s\n' $netdoc_probes\")"
 complete -c netdoc -o no-reference-egress -l no-reference-egress -d "Don't contact netdoc's own built-in reference services"
 complete -c netdoc -o no-history -l no-history -d "Don't read or write the saved target history"
 complete -c netdoc -o version -l version -d 'Print version and exit'

@@ -13,6 +13,13 @@ _netdoc_ifaces() {
   (( $#ifaces )) && _describe -t interfaces 'interface' ifaces
 }
 
+# Stable probe IDs for -check and -skip. Both take a comma-separated list, so
+# _values with a ',' separator completes each element and keeps the ones
+# already typed. Kept in sync with StableProbes() by the packaging test.
+_netdoc_probes() {
+  _values -s , 'probe ID' iface internet_tcp quic_udp_443 proxy_connect dns dns_public dns_encrypted target_tcp path_mtu ssid tls http https ssh_banner smtp_banner
+}
+
 # No -s: it would let single-letter options stack, and the single-dash long
 # spellings below (-json) would be read as stacked letters.
 # Targets are hostnames, URLs, and IP literals, none of them enumerable, so
@@ -33,8 +40,8 @@ _arguments \
   '(--peer-connect -peer-connect)'{--peer-connect,-peer-connect}'[read a temporary pairing string and run a two-ended diagnosis]' \
   '(--via -via)'{--via,-via}'[run remotely, or provide side B for live two-sided diagnosis]:destination:_hosts' \
   '(- *)'{--list-checks,-list-checks}'[list stable probe IDs and names, then exit]' \
-  '*'{--check,-check}'[run stable probe IDs (comma-separated; repeatable)]:probe IDs:' \
-  '*'{--skip,-skip}'[skip stable probe IDs (comma-separated; repeatable)]:probe IDs:' \
+  '*'{--check,-check}'[run stable probe IDs (comma-separated; repeatable)]:probe IDs:_netdoc_probes' \
+  '*'{--skip,-skip}'[skip stable probe IDs (comma-separated; repeatable)]:probe IDs:_netdoc_probes' \
   '(--no-reference-egress -no-reference-egress)'{--no-reference-egress,-no-reference-egress}"[don't contact netdoc's own built-in reference services]" \
   '(--iface -iface)'{--iface,-iface}'[bind probes to an interface name or exact local IP]:interface:_netdoc_ifaces' \
   '(--public-dns -public-dns)'{--public-dns,-public-dns}'[second-opinion DNS resolver IP, empty to skip (default 8.8.8.8)]:ip address:' \

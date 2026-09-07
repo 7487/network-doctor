@@ -15,7 +15,23 @@ _netdoc() {
             COMPREPLY=($(compgen -W "$(command ls /sys/class/net 2>/dev/null)" -- "$cur"))
             return
             ;;
-        -timeout | --timeout | -check | --check | -skip | --skip | -peer-listen | --peer-listen)
+        -check | --check | -skip | --skip)
+            # Stable probe IDs, comma-separated. Only the segment after the
+            # last comma is completed, and the prefix is put back on the
+            # candidates, so `dns,tl<TAB>` completes to `dns,tls` rather than
+            # replacing the whole word. Keep in sync with StableProbes(); the
+            # packaging test fails if this list drifts.
+            local prefix="" segment="$cur"
+            if [[ $cur == *,* ]]; then
+                prefix="${cur%,*},"
+                segment="${cur##*,}"
+            fi
+            COMPREPLY=($(compgen -P "$prefix" -W "iface internet_tcp quic_udp_443 proxy_connect dns dns_public dns_encrypted target_tcp path_mtu ssid tls http https ssh_banner smtp_banner" -- "$segment"))
+            # No trailing space: a comma-separated list is usually not finished.
+            compopt -o nospace 2>/dev/null
+            return
+            ;;
+        -timeout | --timeout | -peer-listen | --peer-listen)
             # These values have nothing useful to enumerate.
             return
             ;;

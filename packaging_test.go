@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/heymaikol/network-doctor/internal/app"
+	"github.com/heymaikol/network-doctor/internal/diagnostic"
 	"github.com/heymaikol/network-doctor/internal/profile"
 	"github.com/heymaikol/network-doctor/internal/ui"
 	"gopkg.in/yaml.v3"
@@ -470,6 +471,49 @@ func TestShippedSurfacesOfferTheRealKeyPresets(t *testing.T) {
 	}
 	if got := manKeyPresets(string(data)); !slices.Equal(got, want) {
 		t.Errorf("packaging/netdoc.1 documents -keys values %v, want %v", got, want)
+	}
+}
+
+func TestShippedSurfacesOfferTheRealProbeIDs(t *testing.T) {
+	// -check and -skip take stable probe IDs, and the three completion files
+	// each carry their own copy of the list. StableProbes() is the source of
+	// truth, so this fails the build rather than letting a new or renamed probe
+	// leave the shells offering an ID that no longer exists.
+	probes := diagnostic.StableProbes()
+	want := make([]string, 0, len(probes))
+	for _, probe := range probes {
+		want = append(want, string(probe.ID))
+	}
+	if len(want) == 0 {
+		t.Fatal("StableProbes() returned nothing; this test would pass vacuously")
+	}
+
+	completions := []struct {
+		path, pattern string
+	}{
+		{"packaging/completions/netdoc.bash", `(?s)-check \| --check \| -skip \| --skip\).*?compgen -P "\$prefix" -W "([^"]*)".*?
+\s*;;`},
+		{"packaging/completions/netdoc.zsh", `(?m)^\s*_values -s , 'probe ID' (.*)$`},
+		{"packaging/completions/netdoc.fish", `(?m)^set -l netdoc_probes (.*)$`},
+	}
+	for _, completion := range completions {
+		if got := completionVocabulary(t, completion.path, completion.pattern); !slices.Equal(got, want) {
+			t.Errorf("%s offers probe IDs %v, want %v", completion.path, got, want)
+		}
+	}
+	// The fish file names that list once, so -check and -skip are each checked
+	// to offer it, and to offer it through __fish_complete_list: a plain -a
+	// replaces the whole comma-separated token, and without -f the flag falls
+	// back to completing filenames.
+	fish, err := os.ReadFile("packaging/completions/netdoc.fish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{"check", "skip"} {
+		declaration := regexp.MustCompile(`(?m)^complete -c netdoc -o ` + flag + ` [^\n]* -f [^\n]*\\\n[ \t]*-a "\(__fish_complete_list , \\"printf '%s\\n' \$netdoc_probes\\"\)"$`)
+		if !declaration.Match(fish) {
+			t.Errorf("packaging/completions/netdoc.fish: -%s must complete $netdoc_probes through __fish_complete_list and pass -f", flag)
+		}
 	}
 }
 
