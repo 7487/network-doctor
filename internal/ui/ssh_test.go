@@ -873,10 +873,19 @@ func TestSSHKeysIn(t *testing.T) {
 		{name: "public half alone", files: []string{"id_ed25519.pub"}},
 		{name: "private half alone", files: []string{"id_ed25519"}},
 		{name: "directory under the private name", files: []string{"id_rsa.pub"}, dirs: []string{"id_rsa"}},
+		// Trimming ".pub" off a bare ".pub" leaves nothing, and joining
+		// nothing onto the directory names the directory. It is not a
+		// regular file, so it is not offered as a key to ssh -i.
+		{name: "bare .pub file", files: []string{".pub"}},
 		{
+			// The sort has to be the thing that orders these. ReadDir hands
+			// back the full names in order, and "id_ed25519-work.pub" sorts
+			// before "id_ed25519.pub" because '-' is below '.', while the
+			// trimmed key names sort the other way round. Without the sort
+			// this case comes back with the pair swapped.
 			name:  "several keys sort by name",
-			files: []string{"id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "id_ecdsa", "id_ecdsa.pub", "known_hosts", "config"},
-			want:  []string{"id_ecdsa", "id_ed25519", "id_rsa"},
+			files: []string{"id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "id_ed25519-work", "id_ed25519-work.pub", "id_ecdsa", "id_ecdsa.pub", "known_hosts", "config"},
+			want:  []string{"id_ecdsa", "id_ed25519", "id_ed25519-work", "id_rsa"},
 		},
 	}
 	for _, tc := range tests {
@@ -905,6 +914,27 @@ func TestSSHKeysIn(t *testing.T) {
 	t.Run("missing directory", func(t *testing.T) {
 		if got := sshKeysIn(filepath.Join(t.TempDir(), ".ssh")); got != nil {
 			t.Errorf("sshKeysIn = %q, want nil", got)
+		}
+	})
+
+	// The regular-file check runs on what the name resolves to, so a key
+	// symlinked in from a dotfile repository is still a key. Switching that
+	// os.Stat to an os.Lstat would quietly drop it from the form.
+	t.Run("symlinked private half", func(t *testing.T) {
+		dir := t.TempDir()
+		stored := filepath.Join(dir, "stored_key")
+		if err := os.WriteFile(stored, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		key := filepath.Join(dir, "id_ed25519")
+		if err := os.Symlink(stored, key); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if err := os.WriteFile(key+".pub", nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := sshKeysIn(dir); !slices.Equal(got, []string{key}) {
+			t.Errorf("sshKeysIn = %q, want %q", got, []string{key})
 		}
 	})
 }
