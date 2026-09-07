@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -566,11 +568,34 @@ func TestSOCKS5RejectsInvalidConnectReplyHeader(t *testing.T) {
 
 // Go's own ProxyFromEnvironment ignores ALL_PROXY; netdoc must not, or a box
 // proxied only through ALL_PROXY reads as having no proxy at all.
+//
+// net/http reads HTTP(S)_PROXY and NO_PROXY once per process and caches them,
+// so a machine, container or CI runner that already exports a proxy cannot be
+// undone with t.Setenv here. The assertions therefore run in a child: this
+// same test binary, re-run with every *_PROXY variable stripped, whatever the
+// parent inherited. The marker variable tells the child to run them.
 func TestProxyFromEnvironmentAllProxy(t *testing.T) {
-	req := &http.Request{URL: &url.URL{Scheme: "https", Host: ConnectivityProbeHost}}
-	if u, err := http.ProxyFromEnvironment(req); u != nil || err != nil {
-		t.Skipf("test environment already has HTTP(S)_PROXY set (%v, %v)", u, err)
+	if os.Getenv("NETDOC_PROXY_ENV_HELPER") == "" {
+		args := []string{"-test.run=^TestProxyFromEnvironmentAllProxy$"}
+		// go test -cover exports GOCOVERDIR, but a test binary only writes its
+		// counters there when told to, so the child's coverage of
+		// proxyFromEnvironment lands in the parent's profile.
+		if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+			args = append(args, "-test.gocoverdir="+dir)
+		}
+		// #nosec G204 G702 -- the child is this same test binary, os.Args[0],
+		// re-run with a literal -test.run filter.
+		cmd := exec.Command(os.Args[0], args...)
+		cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
+			name, _, _ := strings.Cut(kv, "=")
+			return strings.HasSuffix(strings.ToUpper(name), "_PROXY")
+		}), "NETDOC_PROXY_ENV_HELPER=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("test rerun without proxy variables: %v\n%s", err, out)
+		}
+		return
 	}
+	req := &http.Request{URL: &url.URL{Scheme: "https", Host: ConnectivityProbeHost}}
 	for _, name := range []string{"ALL_PROXY", "all_proxy"} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("ALL_PROXY", "")
