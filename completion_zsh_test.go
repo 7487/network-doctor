@@ -172,16 +172,19 @@ func TestZshCompletionOffersSnapshotsOnlyWhereTheyAreRead(t *testing.T) {
 			name: "two-sided with an attached via value has a live side B",
 			line: "netdoc --two-sided --via=h1 ",
 			// --via=h1 is the same run as --via h1, so it has to reach the
-			// same answer. _arguments does not read the attached value as the
-			// option, so it spends the positional here and leaves the flags.
+			// same answer: side B is a host, so no snapshot here. That
+			// suppression is what this row pins, rather than the flag list.
+			// The flags were only reachable while _arguments could not read
+			// the attached value as the option and spent the positional on
+			// it. The option spec now takes '=', so the attached form parses
+			// like the separated form above and leaves the positional open,
+			// and both forms offer neither a snapshot nor the flag list.
 			files: false,
-			flags: true,
 		},
 		{
 			name:  "two-sided with a single-dash attached via value has a live side B",
 			line:  "netdoc --two-sided -via=h1 ",
 			files: false,
-			flags: true,
 		},
 		{
 			name: "an ordinary target is not a filename",
