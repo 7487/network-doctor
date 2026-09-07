@@ -857,6 +857,58 @@ func TestSSHKeyChooser(t *testing.T) {
 	}
 }
 
+// Key discovery is the .pub file next to a regular private half, nothing
+// else: a lone half of either kind, or a directory wearing the private name,
+// is not a key. Every case runs in its own temporary directory, so no test
+// reads the developer's ~/.ssh or needs a real key.
+func TestSSHKeysIn(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string // regular files, created empty
+		dirs  []string
+		want  []string // discovered keys, relative to the directory
+	}{
+		{name: "empty directory"},
+		{name: "matching pair", files: []string{"id_ed25519", "id_ed25519.pub"}, want: []string{"id_ed25519"}},
+		{name: "public half alone", files: []string{"id_ed25519.pub"}},
+		{name: "private half alone", files: []string{"id_ed25519"}},
+		{name: "directory under the private name", files: []string{"id_rsa.pub"}, dirs: []string{"id_rsa"}},
+		{
+			name:  "several keys sort by name",
+			files: []string{"id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "id_ecdsa", "id_ecdsa.pub", "known_hosts", "config"},
+			want:  []string{"id_ecdsa", "id_ed25519", "id_rsa"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, d := range tc.dirs {
+				if err := os.Mkdir(filepath.Join(dir, d), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, f := range tc.files {
+				if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var want []string
+			for _, w := range tc.want {
+				want = append(want, filepath.Join(dir, w))
+			}
+			if got := sshKeysIn(dir); !slices.Equal(got, want) {
+				t.Errorf("sshKeysIn = %q, want %q", got, want)
+			}
+		})
+	}
+
+	t.Run("missing directory", func(t *testing.T) {
+		if got := sshKeysIn(filepath.Join(t.TempDir(), ".ssh")); got != nil {
+			t.Errorf("sshKeysIn = %q, want nil", got)
+		}
+	})
+}
+
 // A password is echoed as dots, never as itself.
 func TestSSHPasswordMasked(t *testing.T) {
 	f := newSSHForm(defaultStyles, mustTarget(t, "example.com"))
