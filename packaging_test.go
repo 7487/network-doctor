@@ -517,6 +517,53 @@ func TestShippedSurfacesOfferTheRealProbeIDs(t *testing.T) {
 	}
 }
 
+// The -f at the top of netdoc.fish suppresses file candidates for the whole
+// command, but an option-specific -r can quietly turn them back on for that
+// one option. Every value-taking option whose value is not a path therefore
+// has to repeat -f on its own declaration; the exceptions are the options
+// that genuinely take files, which stay spelled with -F.
+func TestFishKeepsNonPathValuesOffFileCompletion(t *testing.T) {
+	data, err := os.ReadFile("packaging/completions/netdoc.fish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fish := string(data)
+
+	// -profile, -check, -skip and -via gained -f when their value
+	// completions landed; the rest are the cases that still fell back to
+	// filenames. Kept as one list so a new non-path option has to opt out.
+	noFiles := []string{
+		"profile", "check", "skip", "via",
+		"peer-listen", "iface", "public-dns", "keys", "timeout",
+	}
+	for _, flag := range noFiles {
+		declaration := regexp.MustCompile(`(?m)^complete -c netdoc -o ` + flag + `[^\n]* -f`).FindString(fish)
+		if declaration == "" {
+			t.Errorf("packaging/completions/netdoc.fish: --%s takes a value that is not a path, so its declaration must pass -f", flag)
+			continue
+		}
+		if strings.Contains(declaration, " -F") {
+			t.Errorf("packaging/completions/netdoc.fish: --%s passes -F, which brings file candidates back", flag)
+		}
+	}
+
+	// -save and -support write .ndoc files, and the snapshot arguments of
+	// -compare and offline --two-sided are files too, so those keep -F.
+	for _, flag := range []string{"save", "support"} {
+		if !regexp.MustCompile(`(?m)^complete -c netdoc -o ` + flag + `[^\n]* -F`).MatchString(fish) {
+			t.Errorf("packaging/completions/netdoc.fish: --%s writes a file, so its declaration must keep -F", flag)
+		}
+	}
+	for _, condition := range []string{
+		`-n '__fish_seen_argument -o compare -l compare' -F`,
+		`-n '__fish_seen_argument -o two-sided -l two-sided; and not __fish_seen_argument -o via -l via' -F`,
+	} {
+		if !strings.Contains(fish, condition) {
+			t.Errorf("packaging/completions/netdoc.fish: snapshot file completion must stay gated behind %s", condition)
+		}
+	}
+}
+
 func TestShippedSurfacesOfferTheRealProfiles(t *testing.T) {
 	want := append(profile.Builtins().Names(), "list")
 	completions := []struct {

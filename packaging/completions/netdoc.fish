@@ -24,7 +24,7 @@ complete -c netdoc -o two-sided -l two-sided -d 'Localize two saved snapshots, o
 # file completion comes back only while --via is absent.
 complete -c netdoc -n '__fish_seen_argument -o compare -l compare' -F
 complete -c netdoc -n '__fish_seen_argument -o two-sided -l two-sided; and not __fish_seen_argument -o via -l via' -F
-complete -c netdoc -o peer-listen -l peer-listen -r -d 'Listen for an authenticated peer on an exact IP:port (repeatable)'
+complete -c netdoc -o peer-listen -l peer-listen -r -f -d 'Listen for an authenticated peer on an exact IP:port (repeatable)'
 complete -c netdoc -o peer-connect -l peer-connect -d 'Read a temporary pairing string and run a two-ended diagnosis'
 complete -c netdoc -o via -l via -r -f \
     -a '(__fish_print_hostnames)' \
@@ -46,9 +46,9 @@ complete -c netdoc -o no-history -l no-history -d "Don't read or write the saved
 complete -c netdoc -o version -l version -d 'Print version and exit'
 complete -c netdoc -s h -o help -l help -d 'Print usage and exit'
 
-complete -c netdoc -o iface -l iface -r -d 'Bind probes to an interface name or exact local IP' \
+complete -c netdoc -o iface -l iface -r -f -d 'Bind probes to an interface name or exact local IP' \
     -a '(command ls /sys/class/net 2>/dev/null)'
-complete -c netdoc -o public-dns -l public-dns -r -d 'Second-opinion DNS resolver IP, empty to skip (default 8.8.8.8)'
-complete -c netdoc -o keys -l keys -r -d 'Keybinding preset for the TUI (default: default)' \
+complete -c netdoc -o public-dns -l public-dns -r -f -d 'Second-opinion DNS resolver IP, empty to skip (default 8.8.8.8)'
+complete -c netdoc -o keys -l keys -r -f -d 'Keybinding preset for the TUI (default: default)' \
     -a 'default vim'
-complete -c netdoc -o timeout -l timeout -r -d 'Per-check probe timeout (default 4s)'
+complete -c netdoc -o timeout -l timeout -r -f -d 'Per-check probe timeout (default 4s)'
